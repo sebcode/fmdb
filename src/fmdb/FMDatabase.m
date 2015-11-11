@@ -1,8 +1,11 @@
 #import "FMDatabase.h"
 #import "unistd.h"
 #import <objc/runtime.h>
+#import "FMDatabase+Private.h"
 
 @interface FMDatabase ()
+
+@property (nonatomic, assign) sqlite3 *db;
 
 - (FMResultSet *)executeQuery:(NSString *)sql withArgumentsInArray:(NSArray*)arrayArgs orDictionary:(NSDictionary *)dictionaryArgs orVAList:(va_list)args;
 - (BOOL)executeUpdate:(NSString*)sql error:(NSError**)outErr withArgumentsInArray:(NSArray*)arrayArgs orDictionary:(NSDictionary *)dictionaryArgs orVAList:(va_list)args;
@@ -109,7 +112,7 @@
     return sqlite3_threadsafe() != 0;
 }
 
-- (sqlite3*)sqliteHandle {
+- (void*)sqliteHandle {
     return _db;
 }
 
@@ -149,11 +152,11 @@
     return YES;
 }
 
-#if SQLITE_VERSION_NUMBER >= 3005000
 - (BOOL)openWithFlags:(int)flags {
     return [self openWithFlags:flags vfs:nil];
 }
-- (BOOL)openWithFlags:(int)flags vfs:(NSString *)vfsName {
+- (BOOL)openWithFlags:(int)flags vfs:(NSString *)vfsName; {
+#if SQLITE_VERSION_NUMBER >= 3005000
     if (_db) {
         return YES;
     }
@@ -170,8 +173,12 @@
     }
     
     return YES;
-}
+#else 
+    NSLog(@"Requires SQLite 3.5; will just open");
+    return [self open];
 #endif
+
+}
 
 
 - (BOOL)close {
@@ -276,8 +283,7 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
     return -1;
 }
 
-- (void)setBusyRetryTimeout:(int)i {
-#pragma unused(i)
+- (void)setBusyRetryTimeout:(__unused int)i {
     NSLog(@"%s:%d", __FUNCTION__, __LINE__);
     NSLog(@"FMDB: setBusyRetryTimeout does nothing, please use setMaxBusyRetryTimeInterval:");
 }
@@ -357,7 +363,7 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
     return [self rekeyWithData:keyData];
 }
 
-- (BOOL)rekeyWithData:(NSData *)keyData {
+- (BOOL)rekeyWithData:(__unused NSData *)keyData {
 #ifdef SQLITE_HAS_CODEC
     if (!keyData) {
         return NO;
@@ -372,7 +378,6 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
     
     return (rc == SQLITE_OK);
 #else
-#pragma unused(keyData)
     return NO;
 #endif
 }
@@ -383,7 +388,7 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
     return [self setKeyWithData:keyData];
 }
 
-- (BOOL)setKeyWithData:(NSData *)keyData {
+- (BOOL)setKeyWithData:(__unused NSData *)keyData {
 #ifdef SQLITE_HAS_CODEC
     if (!keyData) {
         return NO;
@@ -393,7 +398,6 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
     
     return (rc == SQLITE_OK);
 #else
-#pragma unused(keyData)
     return NO;
 #endif
 }
@@ -735,7 +739,12 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
 }
 
 - (FMResultSet *)executeQuery:(NSString *)sql withArgumentsInArray:(NSArray*)arrayArgs orDictionary:(NSDictionary *)dictionaryArgs orVAList:(va_list)args {
-    
+
+    // XXX
+    if (![NSThread isMainThread]) {
+        //NSLog(@"%@ EXEC %@ %@", @([NSThread isMainThread]), sql, [NSThread currentThread].description);
+    }
+
     if (![self databaseExists]) {
         return 0x00;
     }
@@ -905,14 +914,6 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
 
 - (FMResultSet *)executeQuery:(NSString *)sql withArgumentsInArray:(NSArray *)arguments {
     return [self executeQuery:sql withArgumentsInArray:arguments orDictionary:nil orVAList:nil];
-}
-
-- (FMResultSet *)executeQuery:(NSString *)sql values:(NSArray *)values error:(NSError * __autoreleasing *)error {
-    FMResultSet *rs = [self executeQuery:sql withArgumentsInArray:values orDictionary:nil orVAList:nil];
-    if (!rs && error) {
-        *error = [self lastError];
-    }
-    return rs;
 }
 
 - (FMResultSet *)executeQuery:(NSString*)sql withVAList:(va_list)args {
@@ -1125,10 +1126,6 @@ static int FMDBDatabaseBusyHandler(void *f, int count) {
 
 - (BOOL)executeUpdate:(NSString*)sql withArgumentsInArray:(NSArray *)arguments {
     return [self executeUpdate:sql error:nil withArgumentsInArray:arguments orDictionary:nil orVAList:nil];
-}
-
-- (BOOL)executeUpdate:(NSString*)sql values:(NSArray *)values error:(NSError * __autoreleasing *)error {
-    return [self executeUpdate:sql error:error withArgumentsInArray:values orDictionary:nil orVAList:nil];
 }
 
 - (BOOL)executeUpdate:(NSString*)sql withParameterDictionary:(NSDictionary *)arguments {
@@ -1379,7 +1376,7 @@ void FMDBBlockSQLiteCallBackFunction(sqlite3_context *context, int argc, sqlite3
 }
 
 
-- (void)makeFunctionNamed:(NSString*)name maximumArguments:(int)count withBlock:(void (^)(sqlite3_context *context, int argc, sqlite3_value **argv))block {
+- (void)makeFunctionNamed:(NSString*)name maximumArguments:(int)count withBlock:(void (^)(void *context, int argc, void **argv))block {
     
     if (!_openFunctions) {
         _openFunctions = [NSMutableSet new];

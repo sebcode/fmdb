@@ -1,5 +1,4 @@
 #import <Foundation/Foundation.h>
-#import "sqlite3.h"
 #import "FMResultSet.h"
 #import "FMDatabasePool.h"
 
@@ -73,7 +72,6 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
 @interface FMDatabase : NSObject  {
     
-    sqlite3*            _db;
     NSString*           _databasePath;
     BOOL                _logsErrors;
     BOOL                _crashOnErrors;
@@ -217,12 +215,12 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
  @see [sqlite3_open_v2()](http://sqlite.org/c3ref/open.html)
  @see open
  @see close
+ 
+ @warning Requires SQLite 3.5
  */
 
-#if SQLITE_VERSION_NUMBER >= 3005000
 - (BOOL)openWithFlags:(int)flags;
 - (BOOL)openWithFlags:(int)flags vfs:(NSString *)vfsName;
-#endif
 
 /** Closing a database connection
  
@@ -336,52 +334,23 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 - (BOOL)executeUpdateWithFormat:(NSString *)format, ... NS_FORMAT_FUNCTION(1,2);
 
 /** Execute single update statement
- 
+
  This method executes a single SQL update statement (i.e. any SQL that does not return results, such as `UPDATE`, `INSERT`, or `DELETE`. This method employs [`sqlite3_prepare_v2`](http://sqlite.org/c3ref/prepare.html) and [`sqlite3_bind`](http://sqlite.org/c3ref/bind_blob.html) binding any `?` placeholders in the SQL with the optional list of parameters.
- 
+
  The optional values provided to this method should be objects (e.g. `NSString`, `NSNumber`, `NSNull`, `NSDate`, and `NSData` objects), not fundamental data types (e.g. `int`, `long`, `NSInteger`, etc.). This method automatically handles the aforementioned object types, and all other object types will be interpreted as text values using the object's `description` method.
- 
+
  @param sql The SQL to be performed, with optional `?` placeholders.
- 
+
  @param arguments A `NSArray` of objects to be used when binding values to the `?` placeholders in the SQL statement.
- 
+
  @return `YES` upon success; `NO` upon failure. If failed, you can call `<lastError>`, `<lastErrorCode>`, or `<lastErrorMessage>` for diagnostic information regarding the failure.
- 
- @see executeUpdate:values:error:
+
  @see lastError
  @see lastErrorCode
  @see lastErrorMessage
  */
 
 - (BOOL)executeUpdate:(NSString*)sql withArgumentsInArray:(NSArray *)arguments;
-
-/** Execute single update statement
- 
- This method executes a single SQL update statement (i.e. any SQL that does not return results, such as `UPDATE`, `INSERT`, or `DELETE`. This method employs [`sqlite3_prepare_v2`](http://sqlite.org/c3ref/prepare.html) and [`sqlite3_bind`](http://sqlite.org/c3ref/bind_blob.html) binding any `?` placeholders in the SQL with the optional list of parameters.
- 
- The optional values provided to this method should be objects (e.g. `NSString`, `NSNumber`, `NSNull`, `NSDate`, and `NSData` objects), not fundamental data types (e.g. `int`, `long`, `NSInteger`, etc.). This method automatically handles the aforementioned object types, and all other object types will be interpreted as text values using the object's `description` method.
- 
- This is similar to `<executeUpdate:withArgumentsInArray:>`, except that this also accepts a pointer to a `NSError` pointer, so that errors can be returned.
-
- In Swift 2, this throws errors, as if it were defined as follows:
- 
- `func executeUpdate(sql: String!, values: [AnyObject]!) throws -> Bool`
- 
- @param sql The SQL to be performed, with optional `?` placeholders.
- 
- @param values A `NSArray` of objects to be used when binding values to the `?` placeholders in the SQL statement.
-
- @param error A `NSError` object to receive any error object (if any).
-
- @return `YES` upon success; `NO` upon failure. If failed, you can call `<lastError>`, `<lastErrorCode>`, or `<lastErrorMessage>` for diagnostic information regarding the failure.
- 
- @see lastError
- @see lastErrorCode
- @see lastErrorMessage
- 
- */
-
-- (BOOL)executeUpdate:(NSString*)sql values:(NSArray *)values error:(NSError * __autoreleasing *)error;
 
 /** Execute single update statement
 
@@ -469,7 +438,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
  */
 
-- (sqlite_int64)lastInsertRowId;
+- (long long int)lastInsertRowId;
 
 /** The number of rows changed by prior SQL statement.
  
@@ -553,41 +522,11 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
  @return A `<FMResultSet>` for the result set upon success; `nil` upon failure. If failed, you can call `<lastError>`, `<lastErrorCode>`, or `<lastErrorMessage>` for diagnostic information regarding the failure.
 
- @see -executeQuery:values:error:
  @see FMResultSet
  @see [`FMResultSet next`](<[FMResultSet next]>)
  */
 
 - (FMResultSet *)executeQuery:(NSString *)sql withArgumentsInArray:(NSArray *)arguments;
-
-/** Execute select statement
- 
- Executing queries returns an `<FMResultSet>` object if successful, and `nil` upon failure.  Like executing updates, there is a variant that accepts an `NSError **` parameter.  Otherwise you should use the `<lastErrorMessage>` and `<lastErrorMessage>` methods to determine why a query failed.
- 
- In order to iterate through the results of your query, you use a `while()` loop.  You also need to "step" (via `<[FMResultSet next]>`) from one record to the other.
- 
- This is similar to `<executeQuery:withArgumentsInArray:>`, except that this also accepts a pointer to a `NSError` pointer, so that errors can be returned.
- 
- In Swift 2, this throws errors, as if it were defined as follows:
- 
- `func executeQuery(sql: String!, values: [AnyObject]!) throws  -> FMResultSet!`
-
- @param sql The SELECT statement to be performed, with optional `?` placeholders.
- 
- @param values A `NSArray` of objects to be used when binding values to the `?` placeholders in the SQL statement.
-
- @param error A `NSError` object to receive any error object (if any).
-
- @return A `<FMResultSet>` for the result set upon success; `nil` upon failure. If failed, you can call `<lastError>`, `<lastErrorCode>`, or `<lastErrorMessage>` for diagnostic information regarding the failure.
- 
- @see FMResultSet
- @see [`FMResultSet next`](<[FMResultSet next]>)
- 
- @note When called from Swift, only use the first two parameters, `sql` and `values`. This but throws the error.
-
- */
-
-- (FMResultSet *)executeQuery:(NSString *)sql values:(NSArray *)values error:(NSError * __autoreleasing *)error;
 
 /** Execute select statement
 
@@ -724,7 +663,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
  @return `YES` if success, `NO` on error.
 
- @see https://www.zetetic.net/sqlcipher/
+ @see http://www.sqlite-encrypt.com/develop-guide.htm
  
  @warning You need to have purchased the sqlite encryption extensions for this method to work.
  */
@@ -737,7 +676,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
  @return `YES` if success, `NO` on error.
 
- @see https://www.zetetic.net/sqlcipher/
+ @see http://www.sqlite-encrypt.com/develop-guide.htm
 
  @warning You need to have purchased the sqlite encryption extensions for this method to work.
  */
@@ -750,7 +689,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
  @return `YES` if success, `NO` on error.
 
- @see https://www.zetetic.net/sqlcipher/
+ @see http://www.sqlite-encrypt.com/develop-guide.htm
  
  @warning You need to have purchased the sqlite encryption extensions for this method to work.
  */
@@ -763,7 +702,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
  @return `YES` if success, `NO` on error.
 
- @see https://www.zetetic.net/sqlcipher/
+ @see http://www.sqlite-encrypt.com/develop-guide.htm
 
  @warning You need to have purchased the sqlite encryption extensions for this method to work.
  */
@@ -789,7 +728,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
  
  */
 
-- (sqlite3*)sqliteHandle;
+- (void*)sqliteHandle;
 
 
 ///-----------------------------
@@ -853,8 +792,6 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 - (NSTimeInterval)maxBusyRetryTimeInterval;
 
 
-#if SQLITE_VERSION_NUMBER >= 3007000
-
 ///------------------
 /// @name Save points
 ///------------------
@@ -916,7 +853,6 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
 
 - (NSError*)inSavePoint:(void (^)(BOOL *rollback))block;
 
-#endif
 
 ///----------------------------
 /// @name SQLite library status
@@ -994,7 +930,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
  @see [sqlite3_create_function()](http://sqlite.org/c3ref/create_function.html)
  */
 
-- (void)makeFunctionNamed:(NSString*)name maximumArguments:(int)count withBlock:(void (^)(sqlite3_context *context, int argc, sqlite3_value **argv))block;
+- (void)makeFunctionNamed:(NSString*)name maximumArguments:(int)count withBlock:(void (^)(void *context, int argc, void **argv))block;
 
 
 ///---------------------
@@ -1098,7 +1034,6 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
  */
 
 @interface FMStatement : NSObject {
-    sqlite3_stmt *_statement;
     NSString *_query;
     long _useCount;
     BOOL _inUse;
@@ -1121,7 +1056,7 @@ typedef int(^FMDBExecuteStatementsCallbackBlock)(NSDictionary *resultsDictionary
  @see [`sqlite3_stmt`](http://www.sqlite.org/c3ref/stmt.html)
  */
 
-@property (atomic, assign) sqlite3_stmt *statement;
+@property (atomic, assign) void *statement;
 
 /** Indication of whether the statement is in use */
 
